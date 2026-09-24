@@ -415,6 +415,19 @@ export const handler = async (event) => {
             };
         }
 
+        const parsedEmpId = Number(empId);
+
+        if (!Number.isInteger(parsedEmpId) || parsedEmpId <= 0) {
+
+            return {
+                statusCode: 400,
+                body: JSON.stringify({
+                    success: false,
+                    message: "empId is required and must be a valid positive integer"
+                })
+            };
+        }
+
 
         // ====================================================
         // CONVERT LOCATION IDS TO CSV
@@ -453,11 +466,7 @@ export const handler = async (event) => {
             }
         );
 
-        const isCreate = !empId || empId === 0;
-
-        const temporaryPassword = isCreate
-            ? generateTemporaryPassword()
-            : null;
+        const temporaryPassword = generateTemporaryPassword();
 
 
         // ====================================================
@@ -469,7 +478,7 @@ export const handler = async (event) => {
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )`,
             [
-                empId || null,
+                parsedEmpId,
                 fullName,
                 joiningDate,
                 email,
@@ -503,7 +512,10 @@ export const handler = async (event) => {
             };
         }
 
-        if (isCreate) {
+        const isCreated =
+            Number(employeeResult.isCreated) === 1;
+
+        if (isCreated) {
 
             try {
 

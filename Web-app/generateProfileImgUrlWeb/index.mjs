@@ -8,7 +8,7 @@ import {
     DeleteObjectCommand
 } from "@aws-sdk/client-s3";
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const PORT = process.env.PORT || 3020;
 
@@ -431,7 +431,16 @@ app.post("/web/profile-img-url", async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, (error) => {
+    if (error) {
+        console.error(
+            `Failed to start Profile Image URL API on port ${PORT}:`,
+            error.message
+        );
+        process.exit(1);
+        return;
+    }
+
     console.log(
         `Profile Image URL API running on http://localhost:${PORT}/web/profile-img-url`
     );
