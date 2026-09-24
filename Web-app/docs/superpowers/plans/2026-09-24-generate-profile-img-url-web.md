@@ -4,7 +4,7 @@
 
 **Goal:** Add `POST /web/profile-img-url` that uploads a profile image to S3 under `profileImages/{email}/{timestamp}.png`, deletes any prior object looked up via SP, and returns `s3Key` + `profileImgPath` for `upsertEmployeeWeb` (no DB write).
 
-**Architecture:** New Web Lambda `generateProfileImgUrlWeb` mirroring `generateSelfieUrlMob` (base64 → buffer → S3 PutObject → public URL), with `web_validateToken` auth and a new SP `web_getEmployeeProfileImgPath` to fetch the old path before best-effort DeleteObject.
+**Architecture:** Single-file Web Lambda `generateProfileImgUrlWeb/index.mjs` mirroring `generateSelfieUrlMob` (base64 → buffer → S3 PutObject → public URL), with `web_validateToken` auth and SP `web_getEmployeeProfileImgPath` to fetch the old path before best-effort DeleteObject. Pure helpers live inline in `index.mjs` (no `helpers.mjs`).
 
 **Tech Stack:** Node.js ESM (`index.mjs`), Express 5 (local), mysql2, dotenv, `@aws-sdk/client-s3`, MySQL stored procedure.
 
@@ -14,10 +14,12 @@
 
 - Auth: Bearer token → `CALL web_validateToken(?)` (never mobile token SP)
 - `empId` and `email` come from the **request body**, not the token
+- `email` is always required (used in S3 key on create and update)
 - S3 key always: `profileImages/{email}/{Date.now()}.png`
 - ContentType: `image/png`
 - Do **not** `UPDATE employee.profileImgPath` (owned by upsertEmployeeWeb)
 - Old S3 delete is best-effort (log + continue on failure)
+- Single-file layout only — no separate `helpers.mjs`
 - Follow existing Web-app Lambda + local Express handler pattern
 - Response field for the public URL is `profileImgPath` (not `imgSrcPath`)
 
@@ -28,25 +30,23 @@
 | File | Responsibility |
 |------|----------------|
 | `Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql` | SP DDL for looking up existing `profileImgPath` |
-| `Web-app/generateProfileImgUrlWeb/package.json` | Dependencies |
-| `Web-app/generateProfileImgUrlWeb/helpers.mjs` | Pure helpers: normalize empId, decode base64, derive S3 key from stored path, build public URL |
-| `Web-app/generateProfileImgUrlWeb/helpers.test.mjs` | Node built-in tests for helpers |
-| `Web-app/generateProfileImgUrlWeb/index.mjs` | Token validation, SP call, S3 delete/upload, Lambda + Express |
+| `Web-app/generateProfileImgUrlWeb/package.json` | Dependencies + start script |
+| `Web-app/generateProfileImgUrlWeb/index.mjs` | Inline helpers, token validation, SP call, S3 delete/upload, Lambda + Express |
 
 ---
 
-### Task 1: Stored procedure SQL
+### Task 1: Ensure stored procedure SQL is present and applied
 
 **Files:**
-- Create: `Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql`
+- Create/verify: `Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql`
 
 **Interfaces:**
 - Consumes: `employee` table columns `empId`, `email`, `profileImgPath`
 - Produces: SP `web_getEmployeeProfileImgPath(p_empId INT, p_email VARCHAR(255))` returning one result set with column `profileImgPath`
 
-- [ ] **Step 1: Write the SP SQL file**
+- [ ] **Step 1: Write/restore the SP SQL file**
 
-Create `Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql` with:
+Create or overwrite `Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql` with:
 
 ```sql
 DROP PROCEDURE IF EXISTS web_getEmployeeProfileImgPath;
@@ -91,36 +91,35 @@ CALL web_getEmployeeProfileImgPath(1, NULL);
 
 Expected: empty result or one `profileImgPath` row; no SQL error.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Commit (only if the SQL file changed)**
 
 ```bash
 git add Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql
-git commit -m "$(cat <<'EOF'
-Add web_getEmployeeProfileImgPath SP for profile image lookup.
-
-EOF
-)"
+git commit -m "Add web_getEmployeeProfileImgPath SP for profile image lookup."
 ```
+
+If the file is already committed and unchanged, skip this commit.
 
 ---
 
-### Task 2: Package scaffold + pure helpers with tests
+### Task 2: Package scaffold + single-file Lambda/Express API
 
 **Files:**
-- Create: `Web-app/generateProfileImgUrlWeb/package.json`
-- Create: `Web-app/generateProfileImgUrlWeb/helpers.mjs`
-- Create: `Web-app/generateProfileImgUrlWeb/helpers.test.mjs`
+- Create/overwrite: `Web-app/generateProfileImgUrlWeb/package.json`
+- Create/overwrite: `Web-app/generateProfileImgUrlWeb/index.mjs`
+- Delete if present: `Web-app/generateProfileImgUrlWeb/helpers.mjs`, `Web-app/generateProfileImgUrlWeb/helpers.test.mjs` (design is single-file)
 
 **Interfaces:**
-- Consumes: none
-- Produces:
+- Consumes: SP from Task 1; `web_validateToken`; env `S3_BUCKET_NAME`, `AWS_REGION`, `DB_*`, `PORT`
+- Produces: `export const handler`; local `POST /web/profile-img-url`
+- Inline helpers (not exported):
   - `normalizeEmpId(empId) → number | null`
   - `decodeBase64Image(imageBase64) → { ok: true, buffer: Buffer } | { ok: false, message: string }`
   - `extractS3KeyFromProfileImgPath(profileImgPath, bucketName, region) → string | null`
-  - `buildS3ObjectUrl(s3Key, bucketName, region) → string`
+  - `buildS3ObjectUrl(s3Key) → string`
   - `buildProfileImageS3Key(email, timestampMs) → string`
 
-- [ ] **Step 1: Create `package.json`**
+- [ ] **Step 1: Write `package.json`**
 
 ```json
 {
@@ -130,7 +129,6 @@ EOF
   "main": "index.mjs",
   "type": "module",
   "scripts": {
-    "test": "node --test helpers.test.mjs",
     "start": "node index.mjs"
   },
   "keywords": [],
@@ -145,115 +143,73 @@ EOF
 }
 ```
 
-- [ ] **Step 2: Write failing tests in `helpers.test.mjs`**
-
-```js
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
-import {
-    normalizeEmpId,
-    decodeBase64Image,
-    extractS3KeyFromProfileImgPath,
-    buildS3ObjectUrl,
-    buildProfileImageS3Key
-} from "./helpers.mjs";
-
-describe("normalizeEmpId", () => {
-    it("returns null for missing, 0, negative, or non-integer", () => {
-        assert.equal(normalizeEmpId(undefined), null);
-        assert.equal(normalizeEmpId(null), null);
-        assert.equal(normalizeEmpId(0), null);
-        assert.equal(normalizeEmpId(-1), null);
-        assert.equal(normalizeEmpId("abc"), null);
-    });
-
-    it("returns positive integer", () => {
-        assert.equal(normalizeEmpId(12), 12);
-        assert.equal(normalizeEmpId("12"), 12);
-    });
-});
-
-describe("decodeBase64Image", () => {
-    it("rejects empty", () => {
-        const result = decodeBase64Image("");
-        assert.equal(result.ok, false);
-    });
-
-    it("decodes data-URI and raw base64", () => {
-        const raw = Buffer.from("hello").toString("base64");
-        const a = decodeBase64Image(raw);
-        const b = decodeBase64Image(`data:image/png;base64,${raw}`);
-        assert.equal(a.ok, true);
-        assert.equal(b.ok, true);
-        assert.deepEqual(a.buffer, Buffer.from("hello"));
-        assert.deepEqual(b.buffer, Buffer.from("hello"));
-    });
-});
-
-describe("extractS3KeyFromProfileImgPath", () => {
-    const bucket = "my-bucket";
-    const region = "ap-south-1";
-
-    it("returns null for empty", () => {
-        assert.equal(
-            extractS3KeyFromProfileImgPath("", bucket, region),
-            null
-        );
-    });
-
-    it("parses full URL", () => {
-        const url =
-            `https://${bucket}.s3.${region}.amazonaws.com/profileImages/a@b.com/1.png`;
-        assert.equal(
-            extractS3KeyFromProfileImgPath(url, bucket, region),
-            "profileImages/a@b.com/1.png"
-        );
-    });
-
-    it("passes through bare key", () => {
-        assert.equal(
-            extractS3KeyFromProfileImgPath(
-                "profileImages/a@b.com/1.png",
-                bucket,
-                region
-            ),
-            "profileImages/a@b.com/1.png"
-        );
-    });
-});
-
-describe("build helpers", () => {
-    it("builds key and URL", () => {
-        assert.equal(
-            buildProfileImageS3Key("a@b.com", 1727160000000),
-            "profileImages/a@b.com/1727160000000.png"
-        );
-        assert.equal(
-            buildS3ObjectUrl(
-                "profileImages/a@b.com/1.png",
-                "my-bucket",
-                "ap-south-1"
-            ),
-            "https://my-bucket.s3.ap-south-1.amazonaws.com/profileImages/a@b.com/1.png"
-        );
-    });
-});
-```
-
-- [ ] **Step 3: Run tests — expect FAIL (module missing)**
+- [ ] **Step 2: Install dependencies**
 
 ```bash
 cd Web-app/generateProfileImgUrlWeb
 npm install
-npm test
 ```
 
-Expected: FAIL with cannot find module `./helpers.mjs` (or missing exports).
+Expected: `node_modules` present; no install errors.
 
-- [ ] **Step 4: Implement `helpers.mjs`**
+- [ ] **Step 3: Remove leftover helper files if they exist**
+
+```bash
+# From repo root (PowerShell-safe)
+Remove-Item -ErrorAction SilentlyContinue Web-app/generateProfileImgUrlWeb/helpers.mjs, Web-app/generateProfileImgUrlWeb/helpers.test.mjs
+```
+
+- [ ] **Step 4: Implement full `index.mjs`**
+
+Create `Web-app/generateProfileImgUrlWeb/index.mjs` with the complete file below (inline helpers + auth + S3 + Express):
 
 ```js
-export const normalizeEmpId = (empId) => {
+import express from "express";
+import mysql from "mysql2/promise";
+import dotenv from "dotenv";
+
+import {
+    S3Client,
+    PutObjectCommand,
+    DeleteObjectCommand
+} from "@aws-sdk/client-s3";
+
+dotenv.config();
+
+const PORT = process.env.PORT || 3020;
+
+const AWS_REGION =
+    process.env.AWS_REGION || "ap-south-1";
+
+const S3_BUCKET_NAME =
+    process.env.S3_BUCKET_NAME;
+
+const dbConfig = {
+    host: process.env.DB_SERVER || "localhost",
+    user: process.env.DB_USER || "root",
+    password: process.env.DB_PASSWORD || "welcome@123",
+    port: Number(process.env.DB_PORT || 3306),
+    database: process.env.DB_NAME || "employee_attendance",
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+};
+
+let pool = null;
+
+const getDbConnection = async () => {
+    if (!pool) {
+        pool = mysql.createPool(dbConfig);
+        console.log("MySQL connection pool created");
+    }
+    return pool;
+};
+
+const s3Client = new S3Client({
+    region: AWS_REGION
+});
+
+const normalizeEmpId = (empId) => {
     if (empId === undefined || empId === null || empId === "") {
         return null;
     }
@@ -267,7 +223,7 @@ export const normalizeEmpId = (empId) => {
     return value;
 };
 
-export const decodeBase64Image = (imageBase64) => {
+const decodeBase64Image = (imageBase64) => {
     if (!imageBase64 || typeof imageBase64 !== "string") {
         return {
             ok: false,
@@ -312,7 +268,7 @@ export const decodeBase64Image = (imageBase64) => {
     };
 };
 
-export const extractS3KeyFromProfileImgPath = (
+const extractS3KeyFromProfileImgPath = (
     profileImgPath,
     bucketName,
     region
@@ -338,9 +294,11 @@ export const extractS3KeyFromProfileImgPath = (
         return trimmed;
     }
 
-    // Fallback: if value looks like a URL with a path, take pathname without leading /
     try {
-        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        if (
+            trimmed.startsWith("http://") ||
+            trimmed.startsWith("https://")
+        ) {
             const url = new URL(trimmed);
             const key = url.pathname.replace(/^\//, "");
             return key || null;
@@ -352,104 +310,13 @@ export const extractS3KeyFromProfileImgPath = (
     return trimmed;
 };
 
-export const buildS3ObjectUrl = (s3Key, bucketName, region) => {
-    return `https://${bucketName}.s3.${region}.amazonaws.com/${s3Key}`;
+const buildS3ObjectUrl = (s3Key) => {
+    return `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${s3Key}`;
 };
 
-export const buildProfileImageS3Key = (email, timestampMs) => {
+const buildProfileImageS3Key = (email, timestampMs) => {
     return `profileImages/${email}/${timestampMs}.png`;
 };
-```
-
-- [ ] **Step 5: Run tests — expect PASS**
-
-```bash
-cd Web-app/generateProfileImgUrlWeb
-npm test
-```
-
-Expected: all tests pass.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add Web-app/generateProfileImgUrlWeb/package.json Web-app/generateProfileImgUrlWeb/package-lock.json Web-app/generateProfileImgUrlWeb/helpers.mjs Web-app/generateProfileImgUrlWeb/helpers.test.mjs
-git commit -m "$(cat <<'EOF'
-Add profile image URL helpers and package scaffold.
-
-EOF
-)"
-```
-
----
-
-### Task 3: Lambda handler + local Express server
-
-**Files:**
-- Create: `Web-app/generateProfileImgUrlWeb/index.mjs`
-- Optionally create: `Web-app/generateProfileImgUrlWeb/.env.example` (only if other Web APIs have one; otherwise skip — use existing env vars)
-
-**Interfaces:**
-- Consumes: helpers from Task 2; SP from Task 1; `web_validateToken`
-- Produces: `export const handler`; local `POST /web/profile-img-url`
-
-- [ ] **Step 1: Implement `index.mjs`**
-
-Create `Web-app/generateProfileImgUrlWeb/index.mjs` following the selfie/web patterns. Full file:
-
-```js
-import express from "express";
-import mysql from "mysql2/promise";
-import dotenv from "dotenv";
-
-import {
-    S3Client,
-    PutObjectCommand,
-    DeleteObjectCommand
-} from "@aws-sdk/client-s3";
-
-import {
-    normalizeEmpId,
-    decodeBase64Image,
-    extractS3KeyFromProfileImgPath,
-    buildS3ObjectUrl,
-    buildProfileImageS3Key
-} from "./helpers.mjs";
-
-dotenv.config();
-
-const PORT = process.env.PORT || 3020;
-
-const AWS_REGION =
-    process.env.AWS_REGION || "ap-south-1";
-
-const S3_BUCKET_NAME =
-    process.env.S3_BUCKET_NAME;
-
-const dbConfig = {
-    host: process.env.DB_SERVER || "localhost",
-    user: process.env.DB_USER || "root",
-    password: process.env.DB_PASSWORD || "welcome@123",
-    port: Number(process.env.DB_PORT || 3306),
-    database: process.env.DB_NAME || "employee_attendance",
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-};
-
-let pool = null;
-
-const getDbConnection = async () => {
-    if (!pool) {
-        pool = mysql.createPool(dbConfig);
-        console.log("MySQL connection pool created");
-    }
-    return pool;
-};
-
-const s3Client = new S3Client({
-    region: AWS_REGION
-});
 
 const validateToken = async (token) => {
     if (!token) {
@@ -601,11 +468,7 @@ const uploadProfileImage = async (event) => {
             })
         );
 
-        const profileImgPath = buildS3ObjectUrl(
-            s3Key,
-            S3_BUCKET_NAME,
-            AWS_REGION
-        );
+        const profileImgPath = buildS3ObjectUrl(s3Key);
 
         return jsonResponse(200, {
             success: true,
@@ -741,35 +604,32 @@ app.listen(PORT, () => {
 });
 ```
 
-- [ ] **Step 2: Re-run helper tests (still green)**
+- [ ] **Step 5: Syntax-check the module loads**
 
 ```bash
 cd Web-app/generateProfileImgUrlWeb
-npm test
+node --check index.mjs
 ```
 
-Expected: PASS.
+Expected: no output, exit code 0.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add Web-app/generateProfileImgUrlWeb/index.mjs
-git commit -m "$(cat <<'EOF'
-Add generateProfileImgUrlWeb Lambda for S3 profile uploads.
-
-EOF
-)"
+git add Web-app/generateProfileImgUrlWeb/package.json Web-app/generateProfileImgUrlWeb/package-lock.json Web-app/generateProfileImgUrlWeb/index.mjs
+git add -u Web-app/generateProfileImgUrlWeb/helpers.mjs Web-app/generateProfileImgUrlWeb/helpers.test.mjs
+git commit -m "Add single-file generateProfileImgUrlWeb Lambda for S3 profile uploads."
 ```
 
 ---
 
-### Task 4: Manual end-to-end verification
+### Task 3: Manual end-to-end verification
 
 **Files:**
 - None (manual checks only)
 
 **Interfaces:**
-- Consumes: running API from Task 3, SP from Task 1, valid web Bearer token, configured `S3_BUCKET_NAME`
+- Consumes: running API from Task 2, SP from Task 1, valid web Bearer token, configured `S3_BUCKET_NAME`
 
 - [ ] **Step 1: Start the local server**
 
@@ -822,31 +682,21 @@ Expected: 200, `data.s3Key` starts with `profileImages/newuser@example.com/`, `d
 3. Confirm old S3 object is gone (or best-effort logged) and response returns a **new** `s3Key` / `profileImgPath`.
 4. Confirm `employee.profileImgPath` in DB is **unchanged** until `upsertEmployeeWeb` is called.
 
-- [ ] **Step 6: Commit design + plan docs if not already committed**
-
-```bash
-git add Web-app/docs/superpowers/specs/2026-09-24-generate-profile-img-url-web-design.md Web-app/docs/superpowers/plans/2026-09-24-generate-profile-img-url-web.md
-git commit -m "$(cat <<'EOF'
-Document generateProfileImgUrlWeb design and implementation plan.
-
-EOF
-)"
-```
-
 ---
 
 ## Spec coverage (self-review)
 
 | Spec requirement | Task |
 |------------------|------|
-| `POST /web/profile-img-url` + Bearer / `web_validateToken` | Task 3 |
-| Body: `email`, optional `empId`, `imageBase64` | Task 3 |
-| S3 key `profileImages/{email}/{timestamp}.png` | Tasks 2–3 |
-| SP lookup + delete old object | Tasks 1, 3 |
-| Return `s3Key` + `profileImgPath`; no DB update | Task 3 |
-| Best-effort delete | Task 3 |
-| Error statuses 401/400/500/404 | Task 3 |
-| Manual create/edit/auth/validation tests | Task 4 |
+| `POST /web/profile-img-url` + Bearer / `web_validateToken` | Task 2 |
+| Body: `email` (always), optional `empId`, `imageBase64` | Task 2 |
+| S3 key `profileImages/{email}/{timestamp}.png` | Task 2 |
+| SP lookup + delete old object | Tasks 1–2 |
+| Return `s3Key` + `profileImgPath`; no DB update | Task 2 |
+| Best-effort delete | Task 2 |
+| Single-file (no helpers.mjs) | Task 2 |
+| Error statuses 401/400/500/404 | Task 2 |
+| Manual create/edit/auth/validation tests | Task 3 |
 
 **Placeholder scan:** none.  
-**Type consistency:** helpers signatures used in Task 3 match Task 2.
+**Type consistency:** inline helper names match usage inside `uploadProfileImage`.
