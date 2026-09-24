@@ -111,6 +111,8 @@ When `p_empId` is set, look up by `empId` only. When `p_empId` is null (create /
 
 ## Components
 
+Single-file layout (same style as `generateSelfieUrlMob`) — no separate `helpers.mjs`.
+
 | Piece | Location |
 |--------|----------|
 | Lambda + local Express | `Web-app/generateProfileImgUrlWeb/index.mjs` |
@@ -118,7 +120,8 @@ When `p_empId` is set, look up by `empId` only. When `p_empId` is null (create /
 | SP SQL | `Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql` |
 
 **Dependencies:** `express`, `mysql2`, `dotenv`, `@aws-sdk/client-s3`  
-**Env:** `S3_BUCKET_NAME`, `AWS_REGION` (default `ap-south-1`), `DB_*`, `PORT` (local)
+**Env:** `S3_BUCKET_NAME`, `AWS_REGION` (default `ap-south-1`), `DB_*`, `PORT` (default `3020` local)  
+**Local server:** Express JSON body limit `10mb` wrapping the Lambda `handler`
 
 ## Error handling
 

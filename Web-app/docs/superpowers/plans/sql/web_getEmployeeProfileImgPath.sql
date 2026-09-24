@@ -1,7 +1,5 @@
 DROP PROCEDURE IF EXISTS web_getEmployeeProfileImgPath;
-
 DELIMITER $$
-
 CREATE PROCEDURE web_getEmployeeProfileImgPath(
     IN p_empId INT,
     IN p_email VARCHAR(255)
@@ -17,5 +15,4 @@ BEGIN
           )
     LIMIT 1;
 END$$
-
 DELIMITER ;
