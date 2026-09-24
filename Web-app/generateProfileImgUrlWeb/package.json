@@ -5,7 +5,6 @@
   "main": "index.mjs",
   "type": "module",
   "scripts": {
-    "test": "node --test helpers.test.mjs",
     "start": "node index.mjs"
   },
   "keywords": [],

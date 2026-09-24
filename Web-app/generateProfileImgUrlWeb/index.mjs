@@ -8,14 +8,6 @@ import {
     DeleteObjectCommand
 } from "@aws-sdk/client-s3";
 
-import {
-    normalizeEmpId,
-    decodeBase64Image,
-    extractS3KeyFromProfileImgPath,
-    buildS3ObjectUrl,
-    buildProfileImageS3Key
-} from "./helpers.mjs";
-
 dotenv.config();
 
 const PORT = process.env.PORT || 3020;
@@ -50,6 +42,115 @@ const getDbConnection = async () => {
 const s3Client = new S3Client({
     region: AWS_REGION
 });
+
+const normalizeEmpId = (empId) => {
+    if (empId === undefined || empId === null || empId === "") {
+        return null;
+    }
+
+    const value = Number(empId);
+
+    if (!Number.isInteger(value) || value <= 0) {
+        return null;
+    }
+
+    return value;
+};
+
+const decodeBase64Image = (imageBase64) => {
+    if (!imageBase64 || typeof imageBase64 !== "string") {
+        return {
+            ok: false,
+            message: "imageBase64 is required"
+        };
+    }
+
+    let base64Data = imageBase64;
+
+    if (imageBase64.includes(",")) {
+        base64Data = imageBase64.split(",")[1];
+    }
+
+    if (!base64Data) {
+        return {
+            ok: false,
+            message: "Invalid Base64 image"
+        };
+    }
+
+    let imageBuffer;
+
+    try {
+        imageBuffer = Buffer.from(base64Data, "base64");
+    } catch {
+        return {
+            ok: false,
+            message: "Invalid Base64 image"
+        };
+    }
+
+    if (!imageBuffer || imageBuffer.length === 0) {
+        return {
+            ok: false,
+            message: "Invalid or empty image"
+        };
+    }
+
+    return {
+        ok: true,
+        buffer: imageBuffer
+    };
+};
+
+const extractS3KeyFromProfileImgPath = (
+    profileImgPath,
+    bucketName,
+    region
+) => {
+    if (!profileImgPath || typeof profileImgPath !== "string") {
+        return null;
+    }
+
+    const trimmed = profileImgPath.trim();
+
+    if (!trimmed) {
+        return null;
+    }
+
+    const prefix =
+        `https://${bucketName}.s3.${region}.amazonaws.com/`;
+
+    if (trimmed.startsWith(prefix)) {
+        return trimmed.slice(prefix.length);
+    }
+
+    if (trimmed.startsWith("profileImages/")) {
+        return trimmed;
+    }
+
+    try {
+        if (
+            trimmed.startsWith("http://") ||
+            trimmed.startsWith("https://")
+        ) {
+            const url = new URL(trimmed);
+            const key = url.pathname.replace(/^\//, "");
+            return key || null;
+        }
+    } catch {
+        return null;
+    }
+
+    return trimmed;
+};
+
+const buildS3ObjectUrl = (s3Key) => {
+    return `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${s3Key}`;
+};
+
+const buildProfileImageS3Key = (email, timestampMs) => {
+    return `profileImages/${email}/${timestampMs}.png`;
+};
 
 const validateToken = async (token) => {
     if (!token) {
@@ -201,11 +302,7 @@ const uploadProfileImage = async (event) => {
             })
         );
 
-        const profileImgPath = buildS3ObjectUrl(
-            s3Key,
-            S3_BUCKET_NAME,
-            AWS_REGION
-        );
+        const profileImgPath = buildS3ObjectUrl(s3Key);
 
         return jsonResponse(200, {
             success: true,
