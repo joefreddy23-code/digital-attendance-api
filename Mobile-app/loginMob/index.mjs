@@ -7,6 +7,16 @@ import jwt from "jsonwebtoken";
 dotenv.config();
 
 
+
+const getHeaders = () => ({
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+        "Content-Type,Authorization,X-Requested-With,Accept,Origin",
+    "Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT",
+    "Access-Control-Max-Age": "86400"
+});
+
 // ============================================================
 // DATABASE CONFIGURATION
 // ============================================================
@@ -75,9 +85,7 @@ const login = async (event) => {
 
             return {
                 statusCode: 400,
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: getHeaders(),
                 body: JSON.stringify({
                     success: false,
                     message: "Employee Id and password are required"
@@ -120,9 +128,7 @@ const login = async (event) => {
 
             return {
                 statusCode: 401,
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: getHeaders(),
                 body: JSON.stringify({
                     success: false,
                     message: "Invalid employee Id or password"
@@ -165,9 +171,7 @@ const login = async (event) => {
 
         return {
             statusCode: 200,
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: getHeaders(),
             body: JSON.stringify({
                 success: true,
                 message: "Login successful",
@@ -195,9 +199,7 @@ const login = async (event) => {
 
         return {
             statusCode: 500,
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: getHeaders(),
             body: JSON.stringify({
                 success: false,
                 message: "Internal server error"
@@ -220,6 +222,13 @@ export const handler = async (event) => {
                    event.httpMethod ||
                    "POST";
 
+    if (method === "OPTIONS") {
+        return {
+            statusCode: 200,
+            headers: getHeaders(),
+            body: ""
+        };
+    }
 
     // --------------------------------------------------------
     // LOGIN
@@ -236,9 +245,7 @@ export const handler = async (event) => {
 
     return {
         statusCode: 404,
-        headers: {
-            "Content-Type": "application/json"
-        },
+        headers: getHeaders(),
         body: JSON.stringify({
             success: false,
             message: "API endpoint not found"
@@ -257,6 +264,17 @@ export const handler = async (event) => {
 // ============================================================
 
 const app = express();
+
+
+app.use((req, res, next) => {
+    res.set(getHeaders());
+
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
+
+    next();
+});
 
 app.use(express.json());
 

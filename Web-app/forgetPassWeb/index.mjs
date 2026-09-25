@@ -5,6 +5,15 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+const getHeaders = () => ({
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+        "Content-Type,Authorization,X-Requested-With,Accept,Origin",
+    "Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT",
+    "Access-Control-Max-Age": "86400"
+});
+
 
 // ============================================================
 // DATABASE CONFIGURATION
@@ -182,6 +191,8 @@ const generateTemporaryPassword = () => {
 
 const forgotPassword = async (event) => {
 
+    const headers = getHeaders();
+
     try {
 
         // --------------------------------------------------------
@@ -217,9 +228,7 @@ const forgotPassword = async (event) => {
 
                 statusCode: 400,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers,
 
                 body: JSON.stringify({
 
@@ -248,9 +257,7 @@ const forgotPassword = async (event) => {
 
                 statusCode: 400,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers,
 
                 body: JSON.stringify({
 
@@ -329,9 +336,7 @@ const forgotPassword = async (event) => {
 
                 statusCode: 500,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers,
 
                 body: JSON.stringify({
 
@@ -357,9 +362,7 @@ const forgotPassword = async (event) => {
 
                 statusCode: 404,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers,
 
                 body: JSON.stringify({
 
@@ -385,9 +388,7 @@ const forgotPassword = async (event) => {
 
                 statusCode: 400,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers,
 
                 body: JSON.stringify({
 
@@ -492,9 +493,7 @@ const forgotPassword = async (event) => {
 
             statusCode: 200,
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers,
 
             body: JSON.stringify({
 
@@ -520,9 +519,7 @@ const forgotPassword = async (event) => {
 
             statusCode: 500,
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers,
 
             body: JSON.stringify({
 
@@ -554,6 +551,7 @@ export const handler = async (
         JSON.stringify(event)
     );
 
+    const headers = getHeaders();
 
     const path =
         event.rawPath ||
@@ -565,6 +563,14 @@ export const handler = async (
         event.requestContext?.http?.method ||
         event.httpMethod ||
         "POST";
+
+    if (method === "OPTIONS") {
+        return {
+            statusCode: 200,
+            headers,
+            body: ""
+        };
+    }
 
 
     // --------------------------------------------------------
@@ -589,9 +595,7 @@ export const handler = async (
 
         statusCode: 404,
 
-        headers: {
-            "Content-Type": "application/json"
-        },
+        headers,
 
         body: JSON.stringify({
 
@@ -618,6 +622,16 @@ export const handler = async (
 // ============================================================
 
 const app = express();
+
+app.use((req, res, next) => {
+    res.set(getHeaders());
+
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
+
+    next();
+});
 
 app.use(express.json());
 

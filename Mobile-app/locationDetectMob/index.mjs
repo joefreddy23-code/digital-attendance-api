@@ -5,6 +5,16 @@ import dotenv from "dotenv";
 dotenv.config();
 
 
+
+const getHeaders = () => ({
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+        "Content-Type,Authorization,X-Requested-With,Accept,Origin",
+    "Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT",
+    "Access-Control-Max-Age": "86400"
+});
+
 // ============================================================
 // DATABASE CONFIGURATION
 // ============================================================
@@ -164,9 +174,7 @@ const jsonResponse = (statusCode, payload) => ({
 
     statusCode,
 
-    headers: {
-        "Content-Type": "application/json"
-    },
+    headers: getHeaders(),
 
     body: JSON.stringify({
         locationCode: null,
@@ -516,6 +524,22 @@ export const handler = async (
     context
 ) => {
 
+
+    {
+        const preflightMethod =
+            event.requestContext?.http?.method ||
+            event.httpMethod ||
+            "POST";
+
+        if (preflightMethod === "OPTIONS") {
+            return {
+                statusCode: 200,
+                headers: getHeaders(),
+                body: ""
+            };
+        }
+    }
+
     try {
 
         console.log(
@@ -624,7 +648,6 @@ export const handler = async (
             event.httpMethod ||
             "POST";
 
-
         // ========================================================
         // LOCATION DETECT
         // ========================================================
@@ -682,6 +705,17 @@ export const handler = async (
 // ============================================================
 
 const app = express();
+
+
+app.use((req, res, next) => {
+    res.set(getHeaders());
+
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
+
+    next();
+});
 
 app.use(express.json());
 

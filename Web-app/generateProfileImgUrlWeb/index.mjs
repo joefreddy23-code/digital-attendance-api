@@ -10,6 +10,16 @@ import {
 
 dotenv.config({ quiet: true });
 
+
+const getHeaders = () => ({
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+        "Content-Type,Authorization,X-Requested-With,Accept,Origin",
+    "Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT",
+    "Access-Control-Max-Age": "86400"
+});
+
 const PORT = process.env.PORT || 3020;
 
 const AWS_REGION =
@@ -196,9 +206,7 @@ const validateToken = async (token) => {
 
 const jsonResponse = (statusCode, payload) => ({
     statusCode,
-    headers: {
-        "Content-Type": "application/json"
-    },
+    headers: getHeaders(),
     body: JSON.stringify(payload)
 });
 
@@ -325,6 +333,22 @@ const uploadProfileImage = async (event) => {
 };
 
 export const handler = async (event) => {
+
+    {
+        const preflightMethod =
+            event.requestContext?.http?.method ||
+            event.httpMethod ||
+            "POST";
+
+        if (preflightMethod === "OPTIONS") {
+            return {
+                statusCode: 200,
+                headers: getHeaders(),
+                body: ""
+            };
+        }
+    }
+
     try {
         console.log("Lambda Event:", JSON.stringify(event));
 
@@ -395,6 +419,17 @@ export const handler = async (event) => {
 };
 
 const app = express();
+
+
+app.use((req, res, next) => {
+    res.set(getHeaders());
+
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
+
+    next();
+});
 
 app.use(
     express.json({

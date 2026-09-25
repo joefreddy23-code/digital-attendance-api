@@ -4,7 +4,28 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+
+const getHeaders = () => ({
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+        "Content-Type,Authorization,X-Requested-With,Accept,Origin",
+    "Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT",
+    "Access-Control-Max-Age": "86400"
+});
+
 const app = express();
+
+app.use((req, res, next) => {
+    res.set(getHeaders());
+
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
+
+    next();
+});
+
 app.use(express.json());
 
 // ============================================================
@@ -77,6 +98,19 @@ const validateToken = async (token) => {
 
 export const handler = async (event) => {
 
+    const method =
+        event.requestContext?.http?.method ||
+        event.httpMethod ||
+        "POST";
+
+    if (method === "OPTIONS") {
+        return {
+            statusCode: 200,
+            headers: getHeaders(),
+            body: ""
+        };
+    }
+
     try {
 
         // ============================================================
@@ -93,6 +127,7 @@ export const handler = async (event) => {
 
             return {
                 statusCode: 401,
+                headers: getHeaders(),
                 body: JSON.stringify({
                     success: false,
                     message: "Authorization token is required"
@@ -114,6 +149,7 @@ export const handler = async (event) => {
 
             return {
                 statusCode: 401,
+                headers: getHeaders(),
                 body: JSON.stringify({
                     success: false,
                     message: "Invalid authorization format"
@@ -134,6 +170,7 @@ export const handler = async (event) => {
 
             return {
                 statusCode: tokenResult.statusCode,
+                headers: getHeaders(),
                 body: JSON.stringify({
                     success: false,
                     message: tokenResult.message
@@ -151,6 +188,7 @@ export const handler = async (event) => {
 
  return {
             statusCode: 200,
+            headers: getHeaders(),
             body: JSON.stringify({
                 success: true,
                 data: {
@@ -168,6 +206,7 @@ export const handler = async (event) => {
 
         return {
             statusCode: 500,
+            headers: getHeaders(),
             body: JSON.stringify({
                 success: false,
                 message: "Internal server error",

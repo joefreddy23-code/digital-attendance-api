@@ -12,6 +12,16 @@ import {
 dotenv.config();
 
 
+
+const getHeaders = () => ({
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+        "Content-Type,Authorization,X-Requested-With,Accept,Origin",
+    "Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT",
+    "Access-Control-Max-Age": "86400"
+});
+
 // ============================================================
 // CONFIGURATION
 // ============================================================
@@ -191,9 +201,7 @@ const uploadSignature = async (event, authenticatedUser) => {
             return {
                 statusCode: 500,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: getHeaders(),
 
                 body: JSON.stringify({
                     success: false,
@@ -221,9 +229,7 @@ const uploadSignature = async (event, authenticatedUser) => {
                 return {
                     statusCode: 400,
 
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
+                    headers: getHeaders(),
 
                     body: JSON.stringify({
                         success: false,
@@ -243,9 +249,7 @@ const uploadSignature = async (event, authenticatedUser) => {
             return {
                 statusCode: 400,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: getHeaders(),
 
                 body: JSON.stringify({
                     success: false,
@@ -271,9 +275,7 @@ const uploadSignature = async (event, authenticatedUser) => {
             return {
                 statusCode: 401,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: getHeaders(),
 
                 body: JSON.stringify({
                     success: false,
@@ -340,9 +342,7 @@ const uploadSignature = async (event, authenticatedUser) => {
             return {
                 statusCode: 400,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: getHeaders(),
 
                 body: JSON.stringify({
                     success: false,
@@ -360,9 +360,7 @@ const uploadSignature = async (event, authenticatedUser) => {
             return {
                 statusCode: 400,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: getHeaders(),
 
                 body: JSON.stringify({
                     success: false,
@@ -424,9 +422,7 @@ const uploadSignature = async (event, authenticatedUser) => {
 
             statusCode: 200,
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: getHeaders(),
 
             body: JSON.stringify({
 
@@ -458,9 +454,7 @@ const uploadSignature = async (event, authenticatedUser) => {
 
             statusCode: 500,
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: getHeaders(),
 
             body: JSON.stringify({
                 success: false,
@@ -482,6 +476,22 @@ export const handler = async (
     event,
     context
 ) => {
+
+
+    {
+        const preflightMethod =
+            event.requestContext?.http?.method ||
+            event.httpMethod ||
+            "POST";
+
+        if (preflightMethod === "OPTIONS") {
+            return {
+                statusCode: 200,
+                headers: getHeaders(),
+                body: ""
+            };
+        }
+    }
 
     try {
 
@@ -508,9 +518,7 @@ export const handler = async (
             return {
                 statusCode: 401,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: getHeaders(),
 
                 body: JSON.stringify({
                     success: false,
@@ -537,9 +545,7 @@ export const handler = async (
             return {
                 statusCode: 401,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: getHeaders(),
 
                 body: JSON.stringify({
                     success: false,
@@ -567,9 +573,7 @@ export const handler = async (
                 statusCode:
                     tokenResult.statusCode,
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: getHeaders(),
 
                 body: JSON.stringify({
                     success: false,
@@ -607,7 +611,6 @@ export const handler = async (
             event.httpMethod ||
             "POST";
 
-
         // ========================================================
         // UPLOAD SELFIE
         // ========================================================
@@ -631,9 +634,7 @@ export const handler = async (
         return {
             statusCode: 404,
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: getHeaders(),
 
             body: JSON.stringify({
                 success: false,
@@ -652,9 +653,7 @@ export const handler = async (
         return {
             statusCode: 500,
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: getHeaders(),
 
             body: JSON.stringify({
                 success: false,
@@ -672,6 +671,17 @@ export const handler = async (
 // ============================================================
 
 const app = express();
+
+
+app.use((req, res, next) => {
+    res.set(getHeaders());
+
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
+
+    next();
+});
 
 app.use(
     express.json({

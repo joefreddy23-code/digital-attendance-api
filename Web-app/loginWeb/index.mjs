@@ -17,18 +17,24 @@ const dbConfig = {
     queueLimit: 0
 };
 
-const JWT_SECRET = process.env.JWT_SECRET ;
+const getHeaders = () => ({
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+        "Content-Type,Authorization,X-Requested-With,Accept,Origin",
+    "Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT",
+    "Access-Control-Max-Age": "86400"
+});
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const JWT_EXPIRES_IN = process.env.EXP_TIME;
 
 let pool;
 
 const getDbConnection = async () => {
-
     if (!pool) {
-
         pool = mysql.createPool(dbConfig);
-
         console.log("MySQL connection pool created");
     }
 
@@ -36,9 +42,9 @@ const getDbConnection = async () => {
 };
 
 const login = async (event) => {
+    const headers = getHeaders();
 
     try {
-
         let body = event.body;
 
         if (typeof body === "string") {
@@ -52,14 +58,9 @@ const login = async (event) => {
         } = body || {};
 
         if ((!email && !empId) || !password) {
-
             return {
                 statusCode: 400,
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
+                headers,
                 body: JSON.stringify({
                     success: false,
                     message: "Employee ID/email and password are required"
@@ -81,14 +82,9 @@ const login = async (event) => {
         const employees = results[0];
 
         if (!employees || employees.length === 0) {
-
             return {
                 statusCode: 401,
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
+                headers,
                 body: JSON.stringify({
                     success: false,
                     message: "Invalid email or password"
@@ -126,51 +122,29 @@ const login = async (event) => {
 
         return {
             statusCode: 200,
-
-            headers: {
-                "Content-Type": "application/json"
-            },
-
+            headers,
             body: JSON.stringify({
-
                 success: true,
-
                 message: "Login successful",
-
                 data: {
-
                     empId: employee.id,
-
                     empName: employee.name,
-
                     empEmail: employee.email,
-
                     empRoleId: employee.roleId,
-
                     empRole: employee.roleName,
-
                     token: token,
-
                     tokenType: "Bearer",
-
                     expiresIn: 86400,
-
                     expiryTime: expiryTime
                 }
             })
         };
-
     } catch (error) {
-
         console.error("Login API Error:", error);
 
         return {
             statusCode: 500,
-
-            headers: {
-                "Content-Type": "application/json"
-            },
-
+            headers,
             body: JSON.stringify({
                 success: false,
                 message: "Internal server error"
@@ -180,37 +154,38 @@ const login = async (event) => {
 };
 
 export const handler = async (event, context) => {
-
     console.log(
         "Lambda event:",
         JSON.stringify(event)
     );
 
+    const headers = getHeaders();
 
     const path =
         event.rawPath ||
         event.path ||
         "";
 
-
     const method =
         event.requestContext?.http?.method ||
         event.httpMethod ||
         "POST";
 
-    if (path === "/login" && method === "POST") {
+    if (method === "OPTIONS") {
+        return {
+            statusCode: 200,
+            headers,
+            body: ""
+        };
+    }
 
+    if (path === "/login" && method === "POST") {
         return await login(event);
     }
 
     return {
-
         statusCode: 404,
-
-        headers: {
-            "Content-Type": "application/json"
-        },
-
+        headers,
         body: JSON.stringify({
             success: false,
             message: "API endpoint not found"
@@ -220,18 +195,23 @@ export const handler = async (event, context) => {
 
 const app = express();
 
+app.use((req, res, next) => {
+    res.set(getHeaders());
+
+    if (req.method === "OPTIONS") {
+        return res.status(200).end();
+    }
+
+    next();
+});
+
 app.use(express.json());
 
 app.post("/web/login", async (req, res) => {
-
     try {
-
         const event = {
-
             body: JSON.stringify(req.body),
-
             rawPath: "/login",
-
             requestContext: {
                 http: {
                     method: "POST"
@@ -239,42 +219,29 @@ app.post("/web/login", async (req, res) => {
             }
         };
 
-
-        const response =
-            await handler(event, {});
-
+        const response = await handler(event, {});
 
         res
             .status(response.statusCode)
             .set(response.headers)
             .send(response.body);
-
     } catch (error) {
-
         console.error(
             "Local API Error:",
             error
         );
 
         res.status(500).json({
-
             success: false,
-
             message: "Internal server error"
-
         });
     }
 });
 
 app.get("/", (req, res) => {
-
     res.json({
-
         success: true,
-
-        message:
-            "Employee Attendance API is running"
-
+        message: "Employee Attendance API is running"
     });
 });
 
