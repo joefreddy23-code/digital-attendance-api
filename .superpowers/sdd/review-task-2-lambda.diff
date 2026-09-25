@@ -1,0 +1,117 @@
+﻿# Review package Task 2
+BASE: a41d76e (committed tree; file may have been unmodified at BASE)
+HEAD: working tree (uncommitted)
+
+## Commits
+(none — commit deferred)
+
+## Stat
+ Web-app/upsertEmployeeWeb/index.mjs | 26 +++++++++++++++++++-------
+ 1 file changed, 19 insertions(+), 7 deletions(-)
+
+## Diff
+
+diff --git a/Web-app/upsertEmployeeWeb/index.mjs b/Web-app/upsertEmployeeWeb/index.mjs
+index 4d92349..7da509a 100644
+--- a/Web-app/upsertEmployeeWeb/index.mjs
++++ b/Web-app/upsertEmployeeWeb/index.mjs
+@@ -408,20 +408,33 @@ export const handler = async (event) => {
+ 
+             return {
+                 statusCode: 400,
+                 body: JSON.stringify({
+                     success: false,
+                     message: "At least one locationId is required"
+                 })
+             };
+         }
+ 
++        const parsedEmpId = Number(empId);
++
++        if (!Number.isInteger(parsedEmpId) || parsedEmpId <= 0) {
++
++            return {
++                statusCode: 400,
++                body: JSON.stringify({
++                    success: false,
++                    message: "empId is required and must be a valid positive integer"
++                })
++            };
++        }
++
+ 
+         // ====================================================
+         // CONVERT LOCATION IDS TO CSV
+         // ====================================================
+ 
+         /*
+             Example:
+ 
+             locationIds: [1, 2, 3]
+ 
+@@ -446,37 +459,33 @@ export const handler = async (event) => {
+                 email,
+                 mobileNumber,
+                 roleId,
+                 designationId,
+                 clientId,
+                 locationIds: locationIdsString,
+                 profileImgPath
+             }
+         );
+ 
+-        const isCreate = !empId || empId === 0;
+-
+-        const temporaryPassword = isCreate
+-            ? generateTemporaryPassword()
+-            : null;
++        const temporaryPassword = generateTemporaryPassword();
+ 
+ 
+         // ====================================================
+         // CALL STORED PROCEDURE
+         // ====================================================
+ 
+         const [results] = await pool.query(
+             `CALL web_upsertEmployee(
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+             )`,
+             [
+-                empId || null,
++                parsedEmpId,
+                 fullName,
+                 joiningDate,
+                 email,
+                 mobileNumber,
+                 roleId,
+                 designationId,
+                 clientId,
+                 locationIdsString,
+                 temporaryPassword,
+                 profileImgPath
+@@ -496,21 +505,24 @@ export const handler = async (event) => {
+ 
+             return {
+                 statusCode: 500,
+                 body: JSON.stringify({
+                     success: false,
+                     message: "Employee could not be saved"
+                 })
+             };
+         }
+ 
+-        if (isCreate) {
++        const isCreated =
++            Number(employeeResult.isCreated) === 1;
++
++        if (isCreated) {
+ 
+             try {
+ 
+                 await transporter.sendMail({
+                     from: `"Employee Attendance" <${process.env.SMTP_USER}>`,
+                     to: email,
+                     subject: "Welcome - Employee Attendance Account",
+                     html: `
+                 <div style="font-family: Arial, sans-serif; line-height: 1.6; max-width: 600px;">
+                     <h2>Welcome to Employee Attendance</h2>

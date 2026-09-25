@@ -1,0 +1,3 @@
+alive=true exitCode=null
+◇ injected env (0) from .env
+Profile Image URL API running on http://localhost:3020/web/profile-img-url

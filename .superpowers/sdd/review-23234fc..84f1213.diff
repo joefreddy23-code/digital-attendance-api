@@ -1,0 +1,10 @@
+﻿# Review package: 23234fc5d6e3bb86f20ff569af20b29c1abd0121..84f1213201ea563d24ffa3f7b0af3775e3c7a85c
+
+## Commits
+84f1213 Add web_getEmployeeProfileImgPath SP for profile image lookup.
+
+## Files changed
+ Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql | 3 +++  1 file changed, 3 insertions(+)
+
+## Diff
+diff --git a/Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql b/Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql index 492ae81..d72e3e2 100644 --- a/Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql +++ b/Web-app/docs/superpowers/plans/sql/web_getEmployeeProfileImgPath.sql @@ -1,18 +1,21 @@  DROP PROCEDURE IF EXISTS web_getEmployeeProfileImgPath; +  DELIMITER $$ +  CREATE PROCEDURE web_getEmployeeProfileImgPath(      IN p_empId INT,      IN p_email VARCHAR(255)  )  BEGIN      SELECT profileImgPath      FROM employee      WHERE (p_empId IS NOT NULL AND empId = p_empId)         OR (              p_empId IS NULL              AND p_email IS NOT NULL              AND email = p_email            )      LIMIT 1;  END$$ +  DELIMITER ;

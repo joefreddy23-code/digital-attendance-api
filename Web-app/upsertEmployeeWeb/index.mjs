@@ -531,7 +531,7 @@ export const handler = async (event) => {
                         Your employee account has been created successfully.
                         You can log in using the credentials below.
                     </p>
-                    <p><strong>Email:</strong> ${email}</p>
+                    <p><strong>Employee No:</strong> ${empId}</p>
                     <p>Your temporary password is:</p>
                     <div style="
                         display: inline-block;

@@ -1,0 +1,4 @@
+◇ injected env (0) from .env
+Profile Image URL API running on http://localhost:3020/web/profile-img-url
+Lambda Event: {"body":"{\"empId\":\"20\",\"email\":\"bhargavi_g@trigent.com\",\"imageBase64\":\"https://github.com/joefreddy23-code\"}","rawPath":"/web/profile-img-url","headers":{"cache-control":"no-cache","postman-token":"015c29ac-95f1-4162-8d3f-54a4283d6871","content-type":"application/json","content-length":"125","host":"localhost:3020","user-agent":"PostmanRuntime/2.7.0","accept":"*/*","accept-encoding":"gzip, deflate, br","connection":"keep-alive","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbXBJZCI6MSwiZW1haWwiOiJqb2VfZkB0cmlnZW50LmNvbSIsInJvbGVJZCI6MSwicm9sZU5hbWUiOiJIdW1hbiBSZXNvdXJjZS8gQWRtaW4iLCJpYXQiOjE3OTAxNTYwMDMsImV4cCI6MTc5MDI0MjQwM30.U7Xg_qKwwk0uPjr44PJVpx_iB0cG03qg4G-T-v3jTVk"},"requestContext":{"http":{"method":"POST"}}}
+MySQL connection pool created
