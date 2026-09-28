@@ -1,4 +1,4 @@
-import express from "express";
+// import express from "express"; // LOCAL ONLY — uncomment to run on local
 import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
@@ -193,66 +193,67 @@ export const handler = async (event, context) => {
     };
 };
 
-const app = express();
+// ============================================================
+// LOCAL EXPRESS API — uncomment below to run on local
+// ============================================================
 
-app.use((req, res, next) => {
-    res.set(getHeaders());
+// const app = express();
 
-    if (req.method === "OPTIONS") {
-        return res.status(200).end();
-    }
+// app.use((req, res, next) => {
+//     res.set(getHeaders());
 
-    next();
-});
+//     if (req.method === "OPTIONS") {
+//         return res.status(200).end();
+//     }
 
-app.use(express.json());
+//     next();
+// });
 
-app.post("/web/login", async (req, res) => {
-    try {
-        const event = {
-            body: JSON.stringify(req.body),
-            rawPath: "/login",
-            requestContext: {
-                http: {
-                    method: "POST"
-                }
-            }
-        };
+// app.use(express.json());
 
-        const response = await handler(event, {});
+// app.post("/web/login", async (req, res) => {
+//     try {
+//         const event = {
+//             body: JSON.stringify(req.body),
+//             rawPath: "/login",
+//             requestContext: {
+//                 http: {
+//                     method: "POST"
+//                 }
+//             }
+//         };
 
-        res
-            .status(response.statusCode)
-            .set(response.headers)
-            .send(response.body);
-    } catch (error) {
-        console.error(
-            "Local API Error:",
-            error
-        );
+//         const response = await handler(event, {});
 
-        res.status(500).json({
-            success: false,
-            message: "Internal server error"
-        });
-    }
-});
+//         res
+//             .status(response.statusCode)
+//             .set(response.headers)
+//             .send(response.body);
+//     } catch (error) {
+//         console.error(
+//             "Local API Error:",
+//             error
+//         );
 
-app.get("/", (req, res) => {
-    res.json({
-        success: true,
-        message: "Employee Attendance API is running"
-    });
-});
+//         res.status(500).json({
+//             success: false,
+//             message: "Internal server error"
+//         });
+//     }
+// });
 
-const PORT =
-    process.env.PORT || 3005;
+// app.get("/", (req, res) => {
+//     res.json({
+//         success: true,
+//         message: "Employee Attendance API is running"
+//     });
+// });
 
+// const PORT =
+//     process.env.PORT || 3005;
 
-app.listen(PORT, () => {
-
-    console.log(
-        `Local API running on http://localhost:${PORT}/web`
-    );
-
-});
+// app.listen(PORT, () => {
+//     console.log(
+//         `Local API running on http://localhost:${PORT}/web`
+//     );
+// });

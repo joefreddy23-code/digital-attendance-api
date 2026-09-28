@@ -20,7 +20,7 @@ const getHeaders = () => ({
     "Access-Control-Max-Age": "86400"
 });
 
-const PORT = process.env.PORT || 3020;
+const PORT = process.env.PORT || 3021;
 
 const AWS_REGION =
     process.env.AWS_REGION || "ap-south-1";
@@ -158,8 +158,8 @@ const buildS3ObjectUrl = (s3Key) => {
     return `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${s3Key}`;
 };
 
-const buildProfileImageS3Key = (email, timestampMs) => {
-    return `profileImages/${email}/${timestampMs}.png`;
+const buildProfileImageS3Key = (empId, timestampMs) => {
+    return `profileImages/${empId}/${timestampMs}.png`;
 };
 
 const validateToken = async (token) => {
@@ -232,18 +232,13 @@ const uploadProfileImage = async (event) => {
             }
         }
 
-        const email =
-            typeof body?.email === "string"
-                ? body.email.trim()
-                : "";
-
         const imageBase64 = body?.imageBase64;
         const empId = normalizeEmpId(body?.empId);
 
-        if (!email) {
+        if (!empId) {
             return jsonResponse(400, {
                 success: false,
-                message: "email is required"
+                message: "empId is required and must be a valid positive integer"
             });
         }
 
@@ -266,8 +261,8 @@ const uploadProfileImage = async (event) => {
         const db = await getDbConnection();
 
         const [rows] = await db.query(
-            "CALL web_getEmployeeProfileImgPath(?, ?)",
-            [empId, email]
+            "CALL web_getEmployeeProfileImgPath(?)",
+            [empId]
         );
 
         const existingPath =
@@ -299,7 +294,7 @@ const uploadProfileImage = async (event) => {
         }
 
         const timestampMs = Date.now();
-        const s3Key = buildProfileImageS3Key(email, timestampMs);
+        const s3Key = buildProfileImageS3Key(empId, timestampMs);
 
         await s3Client.send(
             new PutObjectCommand({
@@ -316,7 +311,6 @@ const uploadProfileImage = async (event) => {
             success: true,
             message: "Profile image uploaded successfully",
             data: {
-                email,
                 empId,
                 s3Key,
                 profileImgPath
